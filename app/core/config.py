@@ -13,11 +13,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",  # Next.js dev
-        "http://localhost:3001",  # Alternative port
-        "https://yourdomain.com", # Replace with your domain
-    ]
+    ALLOWED_ORIGINS: str = os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:3001"
+    )
     
     # AI Model Settings
     MODEL_NAME: str = os.getenv("MODEL_NAME", "microsoft/DialoGPT-medium")
