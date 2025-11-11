@@ -37,16 +37,14 @@ class AIService:
             
             # For lightweight deployment, use pipeline
             # This is more memory efficient than loading model + tokenizer separately
+            # DialoGPT-small optimized settings
             self.pipeline = pipeline(
                 "text-generation",
                 model=self.model_name,
                 device=self.device,
                 torch_dtype=torch.float16 if self.device >= 0 else torch.float32,
                 pad_token_id=50256,  # GPT-2 pad token
-                do_sample=True,
-                temperature=settings.TEMPERATURE,
-                max_length=settings.MAX_LENGTH,
-                return_full_text=False
+                return_full_text=False  # Don't return the prompt in output
             )
             
             logger.info("✅ Model loaded successfully")
@@ -62,9 +60,6 @@ class AIService:
                     model=self.model_name,
                     device=-1,  # Force CPU for fallback
                     pad_token_id=50256,
-                    do_sample=True,
-                    temperature=0.7,
-                    max_length=256,
                     return_full_text=False
                 )
                 logger.info("✅ Fallback model loaded successfully")
@@ -183,37 +178,32 @@ class AIService:
         return "\n".join(context_parts)
     
     def _create_business_prompt(self, user_message: str, context: str = "") -> str:
-        """Create a business-specific prompt"""
-        business_context = f"""You are a fun, witty, and charismatic assistant for {self.business_config['name']}, a {self.business_config['type']}.
+        """Create a simple conversational prompt for DialoGPT"""
+        # DialoGPT-small works best with minimal, conversational format
+        # Build simple back-and-forth dialogue
 
-BUSINESS INFORMATION:
-{settings.BUSINESS_DETAILS}
+        prompt_parts = []
 
-YOUR PERSONALITY:
-- Be fun, witty, and engaging - use humor and clever wordplay when appropriate
-- Show personality and charm in your responses
-- Be conversational and relatable, like chatting with a knowledgeable friend
-- Don't be afraid to be playful or make clever observations
-- Balance professionalism with entertainment - be helpful AND enjoyable
-- Use creative analogies and interesting ways to explain things
-- Feel free to discuss a wide range of topics - you're not limited to just business info
-- Add some flair and style to your responses - boring is not in your vocabulary!
+        # Add context if available (keep it minimal - just last exchange)
+        if context:
+            # Extract just the last exchange from context
+            context_lines = context.strip().split('\n')
+            if len(context_lines) > 2:
+                # Take only the last 2 lines (one exchange)
+                context_lines = context_lines[-2:]
 
-GUIDELINES:
-- Answer questions with enthusiasm and creativity
-- Use the business information when relevant, but don't limit yourself to it
-- Be genuinely helpful while keeping things entertaining
-- Show some attitude and personality - be memorable!
-- Keep responses engaging and reasonably concise (but you can be a bit chatty if the moment calls for it)
-- Throw in a joke, pun, or witty observation when it feels natural
+            for line in context_lines:
+                # Convert to simple Human/Bot format
+                if line.startswith("Human:"):
+                    prompt_parts.append(line)
+                elif line.startswith("Assistant:"):
+                    prompt_parts.append(line.replace("Assistant:", "Bot:"))
 
-CONVERSATION CONTEXT:
-{context}
+        # Add current message
+        prompt_parts.append(f"Human: {user_message}")
+        prompt_parts.append("Bot:")
 
-USER: {user_message}
-ASSISTANT:"""
-
-        return business_context
+        return "\n".join(prompt_parts)
     
     async def chat(
         self,
@@ -316,17 +306,24 @@ ASSISTANT:"""
                 None,
                 lambda: self.pipeline(
                     prompt,
-                    max_new_tokens=300,
-                    temperature=settings.TEMPERATURE,
-                    pad_token_id=self.pipeline.tokenizer.eos_token_id
+                    max_new_tokens=50,  # Reduced for DialoGPT-small - it works better with shorter responses
+                    temperature=0.8,  # Slightly higher for more creative responses
+                    top_p=0.9,  # Nucleus sampling for better quality
+                    pad_token_id=self.pipeline.tokenizer.eos_token_id,
+                    eos_token_id=self.pipeline.tokenizer.eos_token_id,
+                    no_repeat_ngram_size=3  # Prevent repetition
                 )
             )
-            
+
             if response and len(response) > 0:
-                return response[0]['generated_text']
+                generated = response[0]['generated_text'].strip()
+                # DialoGPT sometimes returns empty or very short responses
+                if len(generated) < 3:
+                    return "I'm not sure how to respond to that. Could you please rephrase your question?"
+                return generated
             else:
                 return "I'm not sure how to respond to that. Could you please rephrase your question?"
-                
+
         except Exception as e:
             logger.error(f"Model generation error: {e}")
             return "I apologize, but I'm having trouble processing your request right now."
@@ -335,24 +332,49 @@ ASSISTANT:"""
         """Clean and post-process the AI response"""
         if not response:
             return "I'm not sure how to respond to that. Could you please rephrase your question?"
-        
+
         # Remove any repetition of the user's message
         cleaned = response.replace(original_message, "").strip()
-        
-        # Remove common unwanted prefixes
-        prefixes_to_remove = ["ASSISTANT:", "Assistant:", "AI:", "Bot:"]
+
+        # Remove common unwanted prefixes (DialoGPT specific)
+        prefixes_to_remove = ["ASSISTANT:", "Assistant:", "AI:", "Bot:", "Human:", "USER:", "User:"]
         for prefix in prefixes_to_remove:
             if cleaned.startswith(prefix):
                 cleaned = cleaned[len(prefix):].strip()
-        
+
+        # Remove any remaining conversational markers that DialoGPT might add
+        lines = cleaned.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            # Skip lines that are conversational turn markers
+            if line.strip() and not line.strip().endswith(':'):
+                cleaned_lines.append(line)
+            elif line.strip() and ':' in line:
+                # If there's content after the colon, keep that part
+                parts = line.split(':', 1)
+                if len(parts) > 1 and parts[1].strip():
+                    cleaned_lines.append(parts[1].strip())
+
+        cleaned = ' '.join(cleaned_lines).strip()
+
         # Ensure response isn't empty
-        if not cleaned:
+        if not cleaned or len(cleaned) < 3:
             cleaned = "I understand your question. How can I help you further?"
-        
-        # Limit response length (generous limit for engaging conversations)
-        if len(cleaned) > 1000:
-            cleaned = cleaned[:1000] + "..."
-        
+
+        # Limit response length (DialoGPT-small works better with shorter responses)
+        if len(cleaned) > 500:
+            # Find the last complete sentence within limit
+            truncated = cleaned[:500]
+            last_period = truncated.rfind('.')
+            last_question = truncated.rfind('?')
+            last_exclaim = truncated.rfind('!')
+            last_sentence = max(last_period, last_question, last_exclaim)
+
+            if last_sentence > 0:
+                cleaned = cleaned[:last_sentence + 1]
+            else:
+                cleaned = truncated + "..."
+
         return cleaned
     
     def get_conversation_history(self, conversation_id: str) -> List[ChatMessage]:
