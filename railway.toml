@@ -1,0 +1,27 @@
+# Railway deployment configuration
+# This file is automatically detected by Railway
+
+# Build configuration
+[build]
+builder = "dockerfile"
+
+# Runtime configuration  
+[deploy]
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+# Health check configuration
+[healthcheck]
+path = "/health"
+timeout = 30
+interval = 30
+
+# Environment variables for Railway
+[env]
+# These will be set in Railway dashboard
+# PORT will be automatically set by Railway
+# Add your business-specific environment variables in Railway dashboard:
+# BUSINESS_NAME
+# BUSINESS_TYPE  
+# ALLOWED_TOPICS
+# RESTRICTED_TOPICS
