@@ -26,11 +26,12 @@ venv/
 env/
 ENV/
 
-# PyTorch/ML models (cache)
+# PyTorch/ML models (cache) - but not our app/models/ Python module
 .cache/
-models/
 *.bin
 *.safetensors
+# Ignore only the root-level models directory for cached ML models
+/models/
 
 # Environment variables
 .env
