@@ -184,18 +184,28 @@ class AIService:
     
     def _create_business_prompt(self, user_message: str, context: str = "") -> str:
         """Create a business-specific prompt"""
-        business_context = f"""You are a helpful assistant for {self.business_config['name']}, a {self.business_config['type']}.
+        business_context = f"""You are a fun, witty, and charismatic assistant for {self.business_config['name']}, a {self.business_config['type']}.
 
 BUSINESS INFORMATION:
 {settings.BUSINESS_DETAILS}
 
+YOUR PERSONALITY:
+- Be fun, witty, and engaging - use humor and clever wordplay when appropriate
+- Show personality and charm in your responses
+- Be conversational and relatable, like chatting with a knowledgeable friend
+- Don't be afraid to be playful or make clever observations
+- Balance professionalism with entertainment - be helpful AND enjoyable
+- Use creative analogies and interesting ways to explain things
+- Feel free to discuss a wide range of topics - you're not limited to just business info
+- Add some flair and style to your responses - boring is not in your vocabulary!
+
 GUIDELINES:
-- Be professional, helpful, and friendly
-- Use the business information above to answer questions accurately
-- Focus on topics related to: {', '.join(self.business_config['allowed_topics'])}
-- If asked about unrelated topics, politely redirect to your area of expertise
-- Keep responses concise and helpful
-- End with a helpful question when appropriate
+- Answer questions with enthusiasm and creativity
+- Use the business information when relevant, but don't limit yourself to it
+- Be genuinely helpful while keeping things entertaining
+- Show some attitude and personality - be memorable!
+- Keep responses engaging and reasonably concise (but you can be a bit chatty if the moment calls for it)
+- Throw in a joke, pun, or witty observation when it feels natural
 
 CONVERSATION CONTEXT:
 {context}
@@ -303,10 +313,10 @@ ASSISTANT:"""
             # Run in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
-                None, 
+                None,
                 lambda: self.pipeline(
                     prompt,
-                    max_new_tokens=150,
+                    max_new_tokens=300,
                     temperature=settings.TEMPERATURE,
                     pad_token_id=self.pipeline.tokenizer.eos_token_id
                 )
@@ -339,9 +349,9 @@ ASSISTANT:"""
         if not cleaned:
             cleaned = "I understand your question. How can I help you further?"
         
-        # Limit response length
-        if len(cleaned) > 500:
-            cleaned = cleaned[:500] + "..."
+        # Limit response length (generous limit for engaging conversations)
+        if len(cleaned) > 1000:
+            cleaned = cleaned[:1000] + "..."
         
         return cleaned
     
