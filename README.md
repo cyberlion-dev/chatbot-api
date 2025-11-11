@@ -1,12 +1,14 @@
 # AI Chatbot API 🤖
 
-A production-ready FastAPI chatbot service using HuggingFace transformers. Designed for business-specific contexts with configurable topics and restrictions.
+A production-ready REST API chatbot backend using FastAPI and HuggingFace transformers. Provides intelligent responses with configurable business knowledge - no frontend included.
 
 ## 🚀 Features
 
 - **Free AI Models**: Uses HuggingFace transformers (no API costs)
-- **Business Context**: Configurable topics and restrictions
-- **Memory**: Conversation history tracking
+- **Business Knowledge**: Smart keyword-based responses for business hours, location, pricing, services, etc.
+- **Configurable Context**: Define your business details in a simple environment variable
+- **Topic Filtering**: Restrict inappropriate topics
+- **Conversation Memory**: Track conversation history
 - **Production Ready**: Docker containerized, health checks, logging
 - **Easy Deployment**: One-click Railway deployment
 - **Fast**: Async FastAPI with optimized inference
@@ -14,10 +16,12 @@ A production-ready FastAPI chatbot service using HuggingFace transformers. Desig
 ## 🏗 Architecture
 
 ```
-Frontend (Next.js) → FastAPI → HuggingFace Model → Response
-                              ↕
-                         Conversation Memory
+Your Client → REST API → Business Knowledge / AI Model → JSON Response
+                                    ↕
+                            Conversation Memory
 ```
+
+This is a **backend API only** - integrate it with any frontend, mobile app, or service that can make HTTP requests.
 
 ## 📦 Quick Start
 
@@ -27,23 +31,26 @@ Frontend (Next.js) → FastAPI → HuggingFace Model → Response
 ```bash
 git clone <your-repo>
 cd ai-chatbot-api
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. **Configure environment**:
+2. **Configure your business details**:
 ```bash
 cp .env.example .env
-# Edit .env with your business details
+# Edit .env and update BUSINESS_DETAILS with your actual info
 ```
 
-3. **Run locally**:
+3. **Run the API**:
 ```bash
 uvicorn app.main:app --reload
 ```
 
 4. **Test the API**:
-- Visit: http://localhost:8000/docs
-- Try the `/api/v1/test` endpoint
+- Interactive docs: http://localhost:8000/docs
+- Test script: `python test_api.py`
+- Health check: http://localhost:8000/health
 
 ### Railway Deployment
 
@@ -66,9 +73,11 @@ git push -u origin main
 ```
 BUSINESS_NAME=Your Business Name
 BUSINESS_TYPE=your business type
+BUSINESS_DETAILS="Business Hours: Your hours here. Location: Your address. Contact: Your phone and email. Services: What you offer. Pricing: Your pricing. etc."
 ALLOWED_TOPICS=topic1,topic2,topic3
 RESTRICTED_TOPICS=medical advice,legal advice
 ENVIRONMENT=production
+PORT=8000
 ```
 
 ## 🎯 API Endpoints
@@ -95,90 +104,87 @@ GET /api/v1/config
 
 ## 🔧 Configuration
 
-### Business Settings
-Customize your bot by setting environment variables:
+Edit the `.env` file to configure your chatbot. The most important setting is `BUSINESS_DETAILS`:
 
+### Business Details (Required)
+This is where you put ALL your business information. The chatbot will use this to answer customer questions:
+
+```bash
+BUSINESS_DETAILS="Business Hours: Monday-Friday 9am-6pm, Closed weekends. Location: 123 Main St, Your City, State 12345. Contact: Phone (555) 123-4567, Email info@yourbusiness.com. Services: We offer plumbing, drain cleaning, and water heater installation. Pricing: Service calls $99, hourly rate $150/hr. Shipping: N/A. Returns: 30-day satisfaction guarantee."
+```
+
+**What to include:**
+- Business hours
+- Location/address
+- Contact info (phone, email)
+- Services offered
+- Pricing information
+- Shipping policies (if applicable)
+- Return policies
+- Any other info customers commonly ask about
+
+### Other Settings
 ```bash
 # Business Identity
 BUSINESS_NAME="Acme Plumbing"
 BUSINESS_TYPE="plumbing service company"
 
-# What the bot can discuss
-ALLOWED_TOPICS="drain cleaning,pipe repair,water heaters,pricing,scheduling"
+# Topics the bot can discuss
+ALLOWED_TOPICS="plumbing,pricing,scheduling,services"
 
-# What the bot should avoid  
+# Topics to avoid
 RESTRICTED_TOPICS="medical advice,legal advice,electrical work"
-```
 
-### Model Settings
-```bash
-# Use smaller model for faster responses (good for Railway)
+# AI Model (use small for faster, medium for better quality)
 MODEL_NAME="microsoft/DialoGPT-small"
-
-# Use larger model for better quality (needs more memory)
-MODEL_NAME="microsoft/DialoGPT-medium"
 ```
 
-## 💡 Frontend Integration
+## 💡 Integration Examples
 
-### Next.js Example
+This is a REST API backend - you can integrate it with any client. Here are some examples:
+
+### cURL (Command Line)
+```bash
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are your business hours?",
+    "conversation_id": null,
+    "conversation_history": []
+  }'
+```
+
+### Python
+```python
+import requests
+
+response = requests.post('http://localhost:8000/api/v1/chat', json={
+    'message': 'What are your business hours?',
+    'conversation_id': None,
+    'conversation_history': []
+})
+
+data = response.json()
+print(data['response'])
+```
+
+### JavaScript/Fetch
 ```javascript
-// pages/api/chat.js
-export default async function handler(req, res) {
-  const response = await fetch('https://your-railway-app.railway.app/api/v1/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req.body)
-  });
-  
-  const data = await response.json();
-  res.json(data);
-}
+const response = await fetch('http://localhost:8000/api/v1/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    message: 'What are your business hours?',
+    conversation_id: null,
+    conversation_history: []
+  })
+});
 
-// components/ChatBot.jsx
-const sendMessage = async (message) => {
-  const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message })
-  });
-  return response.json();
-};
+const data = await response.json();
+console.log(data.response);
 ```
 
-### React Component
-```javascript
-import { useState } from 'react';
-
-function ChatBot() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  
-  const sendMessage = async () => {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        message: input,
-        conversation_history: messages 
-      })
-    });
-    
-    const data = await response.json();
-    setMessages([...messages, 
-      { role: 'user', content: input },
-      { role: 'assistant', content: data.response }
-    ]);
-    setInput('');
-  };
-
-  return (
-    <div>
-      {/* Your chat UI */}
-    </div>
-  );
-}
-```
+**Integrate with:** React, Vue, Angular, mobile apps, Slack bots, Discord bots, or any HTTP client!
 
 ## 🎨 Customization Examples
 
@@ -228,23 +234,20 @@ RESTRICTED_TOPICS="medical advice,legal advice,other repair shops"
 
 ## 🚧 Roadmap
 
-### Phase 1 (Current)
+### Current Features
 - ✅ Core chat functionality
+- ✅ Smart business knowledge responses
 - ✅ Business context restrictions
-- ✅ Railway deployment
+- ✅ Railway deployment ready
 - ✅ Conversation memory
+- ✅ REST API with OpenAPI docs
 
-### Phase 2 (Next)
+### Potential Enhancements
 - [ ] Database persistence (PostgreSQL)
 - [ ] User authentication
-- [ ] Multiple business tenants
-- [ ] Analytics dashboard
-
-### Phase 3 (Future)
+- [ ] Analytics tracking
 - [ ] Custom model fine-tuning
-- [ ] Integration with external tools
 - [ ] Multi-language support
-- [ ] Voice interface
 
 ## 🛟 Support & Troubleshooting
 
